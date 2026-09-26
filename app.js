@@ -4,6 +4,7 @@ import { createWorld } from './world3d.js';
 import { QUESTS, createQuestState, getCurrentQuest, getQuestProgress, recordEvent } from './quests.js';
 import { createInput } from './input.js';
 import { createNavigator } from './navigation.js';
+import { createDayNight } from './day-night.js';
 
 const $ = selector => document.querySelector(selector);
 const icon = name => `<svg class="icon" aria-hidden="true"><use href="#i-${name}"/></svg>`;
@@ -98,7 +99,10 @@ function boot() {
   let lastSaved = 0;
   let toastRemaining = 0;
   let finaleTime = 0;
-  let night = quest.counts['finale:fireworks'] ? 1 : quest.questIndex >= 13 ? .25 : 0;
+  const initialTime = Number.isFinite(saved?.timeOfDay) && saved.timeOfDay >= 0 && saved.timeOfDay < 24
+    ? saved.timeOfDay : quest.counts['finale:fireworks'] ? 21 : 9;
+  const daylight = createDayNight({ scene, camera, skyLight, sun, world, initialTime, reducedMotion });
+  if (saved?.dayNightMode === 'day' || saved?.dayNightMode === 'night') daylight.setMode(saved.dayNightMode);
   let dialogCallback = null;
   let previousFocus = null;
   let audio = null;
@@ -115,8 +119,10 @@ function boot() {
   const minimap = $('#minimap');
   const mapContext = minimap.getContext('2d');
   const hud = $('#hud');
-  const skyDay = new THREE.Color(0xa9dfef);
-  const skyNight = new THREE.Color(0x334577);
+  const timeButton = $('#time-button');
+  const timeLabel = $('#time-label');
+  const timeSymbol = $('#time-symbol');
+  const timeLabels = { dawn: '日出', day: '白天', dusk: '傍晚', night: '夜晚' };
 
   const marker = new THREE.Group();
   const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xffda69, depthTest: false });
@@ -195,7 +201,7 @@ function boot() {
   }
 
   function save() {
-    const data = { version: 1, quest, actions: [...actions], photos, zone, floor, position: { x: actor.position.x, z: actor.position.z }, car: { x: car.position.x, z: car.position.z }, sound: soundEnabled };
+    const data = { version: 1, quest, actions: [...actions], photos, zone, floor, position: { x: actor.position.x, z: actor.position.z }, car: { x: car.position.x, z: car.position.z }, sound: soundEnabled, timeOfDay: daylight.time, dayNightMode: daylight.mode };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       $('#save-status').textContent = '冒险进度已自动保存';
@@ -375,11 +381,41 @@ function boot() {
     $('#free-photo').onclick = () => { closeDialog(); enterCamera(null); };
     $('#album-return').onclick = closeDialog;
   }
+  function updateTimeUI() {
+    const period = daylight.period;
+    const label = timeLabels[period];
+    const mode = daylight.mode === 'auto' ? '自动' : '固定';
+    const button = timeButton;
+    if (button.dataset.period !== period || button.dataset.mode !== daylight.mode) {
+      button.dataset.period = period;
+      hud.dataset.period = period;
+      button.dataset.mode = daylight.mode;
+      timeLabel.textContent = `${label} · ${mode}`;
+      timeSymbol.setAttribute('href', period === 'night' ? '#i-moon' : '#i-sun');
+      button.setAttribute('aria-label', `昼夜设置，当前${label}，${mode}模式`);
+    }
+    button.disabled = finaleTime > 0;
+  }
+
+  function openTimeSettings() {
+    if (finaleTime > 0) { toast('先一起看烟花吧', '烟花结束后，就能继续选择白天或夜晚。'); return; }
+    openDialog('白天与夜晚', `<h2>想在什么时候玩？</h2><p>自动模式约 8 分钟过完一天，会经过日出和傍晚。暂停游戏时，时间也会停下来。<br>选白天或夜晚，就会一直保持；任务随时都能做。</p><div class="time-options" role="group" aria-label="昼夜模式">${[['auto', '自动交替', 'cycle'], ['day', '白天', 'sun'], ['night', '夜晚', 'moon']].map(([mode, label, symbol]) => `<button class="secondary-button" data-time-mode="${mode}" aria-pressed="${daylight.mode === mode}">${icon(symbol)}${label}</button>`).join('')}</div>`);
+    for (const button of dialogContent.querySelectorAll('[data-time-mode]')) {
+      button.onclick = () => {
+        daylight.setMode(button.dataset.timeMode);
+        updateTimeUI(); save(); closeDialog(); sound();
+        toast(daylight.mode === 'auto' ? '昼夜开始自动交替' : daylight.mode === 'night' ? '一起看星星吧' : '阳光回来啦', '从顶部昼夜按钮或暂停菜单，随时切换。', 3);
+      };
+    }
+  }
+
   function openPause() {
     openDialog('慢慢玩，不赶时间', `<h2>假期休息一下</h2><p>移动和活动已经暂停，回来的时候接着玩。</p><div class="controls-table"><div><kbd>WASD</kbd>移动 / 方向键</div><div><kbd>空格</kbd>跳跃 / 推秋千</div><div><kbd>E</kbd>和身边的人或物互动</div><div><kbd>Shift</kbd>跑得快一点</div><div><kbd>拖动</kbd>转动视角</div><div><kbd>滚轮</kbd>拉近或拉远</div><div><kbd>J / M</kbd>任务手册 / 地图</div><div><kbd>P / K</kbd>相册 / 收放风筝</div></div><p class="pause-note">手机：左手摇杆移动，右手拖动画面看四周；右下按钮跳跃和互动。任务卡里的「带我过去」会带你沿小路行走。</p><div class="dialog-buttons"><button class="primary-button" id="resume-game">继续冒险</button><button class="secondary-button" id="return-home">回到家门口</button><button class="secondary-button" id="pause-album">假期相册</button></div><div class="reset-area"><button class="text-button" id="reset-game">重新开始这次假期</button><div class="reset-warning" id="reset-warning" hidden><p>会清空这台设备上的主线进度和照片。确定重新出发吗？</p><button class="secondary-button" id="cancel-reset">保留回忆</button> <button class="primary-button" id="confirm-reset">清空并重新开始</button></div></div><p class="pause-note">非官方创意游戏。场景与冒险为原创制作，不代表电影正式剧情。</p>`);
     $('#resume-game').onclick = closeDialog;
     $('#return-home').onclick = () => { closeDialog(); if (driving) exitCar(); changeZone('outside', world.spawn); toast('欢迎回家', '小黄屋一直在这里等你。'); };
     $('#pause-album').onclick = openAlbum;
+    $('#pause-album').insertAdjacentHTML('afterend', '<button class="secondary-button" id="pause-time">白天与夜晚</button>');
+    $('#pause-time').onclick = openTimeSettings;
     $('#reset-game').onclick = () => { $('#reset-warning').hidden = false; $('#cancel-reset').focus(); };
     $('#cancel-reset').onclick = () => { $('#reset-warning').hidden = true; $('#reset-game').focus(); };
     $('#confirm-reset').onclick = () => { try { localStorage.removeItem(STORAGE_KEY); } catch { /* Reload still starts fresh if storage is blocked. */ } location.reload(); };
@@ -595,10 +631,11 @@ function boot() {
       emit('light:lantern'); sound('collect'); burst(object.position, 0xffd27a, 12, 2.8); save(); return;
     }
     if (object.type === 'fireworks') {
-      if ((quest.counts['light:lantern'] || 0) < 3 || quest.questIndex < 13) { toast('压轴惊喜要留到最后', '先完成白天的冒险，再点亮家门口的三盏小灯。'); return; }
-      night = 1;
+      if ((quest.counts['light:lantern'] || 0) < 3 || quest.questIndex < 13) { toast('压轴惊喜要留到最后', '先完成前面的冒险，再点亮家门口的三盏小灯。'); return; }
+      daylight.startNight();
       gatherFamily(object.position);
       finaleTime = 9;
+      updateTimeUI();
       emit('finale:fireworks');
       $('#mode-label').textContent = '我们的完美假期'; $('#mode-label').hidden = false;
       sound('complete');
@@ -647,6 +684,7 @@ function boot() {
   $('#map-button').onclick = openMap;
   $('#album-button').onclick = openAlbum;
   $('#pause-button').onclick = openPause;
+  $('#time-button').onclick = openTimeSettings;
   $('#leave-activity').onclick = () => endActivity();
   $('#shutter-button').onclick = takePhoto;
   $('#close-camera').onclick = exitCamera;
@@ -871,6 +909,7 @@ function boot() {
       for (const place of world.locations) { const d = Math.hypot(actor.position.x - place.x, actor.position.z - place.z); if (d < distance) { distance = d; region = place.name; } }
     }
     $('#region-name').textContent = region;
+    updateTimeUI();
     canvas.setAttribute('aria-label', `3D冒险场景。当前位置：${region}。${nearest ? `附近可互动：${nearest.label}。` : ''}WASD移动，空格跳跃，E互动。`);
     canvas.dataset.x = actor.position.x.toFixed(2);
     canvas.dataset.z = actor.position.z.toFixed(2);
@@ -934,16 +973,8 @@ function boot() {
   }
 
   function updateEnvironment(dt) {
-    const nightTarget = quest.counts['finale:fireworks'] ? 1 : quest.questIndex >= 13 ? .28 : 0;
-    night = THREE.MathUtils.damp(night, nightTarget, .6, dt);
-    scene.background.copy(skyDay).lerp(skyNight, night);
-    scene.fog.color.copy(scene.background);
-    skyLight.intensity = 2.5 - night * 1.2;
-    sun.intensity = 2.8 - night * 2.4;
-    sun.color.set(0xfff3d4).lerp(particleColor.set(0xc1d1ff), night);
     if (zone === 'inside') { const height = world.terrainHeight(120, 0, floor); sun.position.set(105, 45 + height, 32); sun.target.position.set(120, height, 0); }
     else { sun.position.set(actor.position.x - 25, 48, actor.position.z + 32); sun.target.position.set(actor.position.x, 0, actor.position.z); }
-    $('#time-label').textContent = night > .7 ? '星光下的假期' : night > .12 ? '暖暖的傍晚' : '晴朗的早晨';
     if (target && target.zone === zone && (target.floor ?? 0) === floor && !cameraMode) {
       marker.visible = true;
       marker.position.copy(target.position);
@@ -979,6 +1010,7 @@ function boot() {
       }
       if (finaleTime <= 0) {
         $('#mode-label').hidden = true;
+        updateTimeUI();
         openDialog('我们一起的完美假期', `<section class="finale-view"><div class="finale-badge">${icon('star')}</div><h2>十四段冒险，一整个快乐假期</h2><p>从家门口出发，走过花园、游乐场和海滩。<br>最好的假期，就是和喜欢的人一起，把普通的一天变得闪闪发亮。</p><div class="dialog-buttons"><button class="primary-button" id="continue-exploring">继续自由探索</button><button class="secondary-button" id="finale-album">看看假期相册</button></div></section>`);
         $('#continue-exploring').onclick = closeDialog;
         $('#finale-album').onclick = openAlbum;
@@ -1000,6 +1032,7 @@ function boot() {
       updateEnvironment(dt);
       updateParticles(dt);
       updateCamera(dt);
+      daylight.update(dt, zone === 'inside');
       uiTime += dt; saveTime += dt;
       if (uiTime > .12) { uiTime = 0; updateNearby(); }
       if (saveTime > 15) { saveTime = 0; save(); }
@@ -1013,7 +1046,7 @@ function boot() {
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); previousTime = performance.now(); });
   canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); cancelAnimationFrame(frameId); $('#loading').hidden = false; $('#loading-message').textContent = '3D画面暂时中断，冒险进度已保存。正在等待画面恢复…'; save(); });
   canvas.addEventListener('webglcontextrestored', () => location.reload());
-  updateQuestUI(); updateSound(); updateCamera(1, true); updateNearby();
+  updateQuestUI(); updateSound(); updateCamera(1, true); updateEnvironment(0); daylight.update(0, zone === 'inside'); updateNearby();
   $('#loading').hidden = true; hud.hidden = false;
   frameId = requestAnimationFrame(frame);
   toast(saved ? '欢迎回到你的假期' : '假期，从家门口开始', 'WASD 移动，拖动看四周。点「带我过去」，就能找到第一段冒险。', 6);

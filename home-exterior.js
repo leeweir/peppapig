@@ -4,7 +4,7 @@ import * as THREE from 'three';
 // https://tv.sohu.com/v/MjAyNjA4MDcvbjYyMDIzNDQxMC5zaHRtbA==.html
 
 export function buildHomeExterior(context) {
-  const { exterior, place, box, ball, rod, material, window, collider, interact } = context;
+  const { exterior, place, box, ball, rod, material, window, registerWindow, collider, interact } = context;
   const colors = {
     wall: 0xf2ee9d,
     block: 0xf8f3ad,
@@ -127,7 +127,7 @@ export function buildHomeExterior(context) {
     const frame = place(parent, x, z, y);
     if (side) frame.rotation.y = Math.PI / 2;
     frame.scale.setScalar(radius);
-    const pane = new THREE.Mesh(circleGeometry, material(colors.glass));
+    const pane = registerWindow(new THREE.Mesh(circleGeometry, material(colors.glass)));
     frame.add(pane);
     const ring = new THREE.Mesh(ringGeometry, material(colors.white));
     ring.position.z = 0.05;
@@ -182,7 +182,7 @@ export function buildHomeExterior(context) {
   box(door, colors.white, 0, 1.72, 0, 1.65, 3.44, 0.13);
   box(door, colors.door, 0, 1.68, 0.085, 1.39, 3.33, 0.13);
   box(door, colors.white, 0, 2.52, 0.162, 1.09, 1.38, 0.035);
-  box(door, colors.glass, 0, 2.52, 0.185, 0.94, 1.22, 0.025);
+  registerWindow(box(door, colors.glass, 0, 2.52, 0.185, 0.94, 1.22, 0.025));
   rod(door, colors.white, [-0.46, 1.92, 0.211], [0.46, 3.12, 0.211], 0.025);
   rod(door, colors.white, [0.46, 1.92, 0.211], [-0.46, 3.12, 0.211], 0.025);
   box(door, colors.doorInset, 0, 0.75, 0.162, 1.08, 1.16, 0.035);

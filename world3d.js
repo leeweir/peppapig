@@ -29,6 +29,11 @@ export function createWorld() {
   const ducks = [];
   const wavelets = [];
   const materialCache = new Map();
+  const windowMaterials = new Map();
+  const windowGlows = [];
+  const practicalLights = [];
+  const nightWindowColor = new THREE.Color(0xffd394);
+  const practicalGlow = { emissive: 0xffd394, emissiveIntensity: 0 };
   const geometry = {
     box: new THREE.BoxGeometry(1, 1, 1),
     ball: new THREE.SphereGeometry(1, 16, 10),
@@ -200,25 +205,59 @@ export function createWorld() {
   path([[-8, 13], [-10, 22], [-15, 27], [-18, 29]], 1.9);
   path([[33, 3], [32, 11], [33, 22], [34, 32]], 1.3);
 
+  // Only registered panes receive a shared glow material; other blue objects stay unchanged.
+  function registerWindow(pane) {
+    const source = pane.material;
+    let glow = windowMaterials.get(source);
+    if (!glow) {
+      glow = source.clone();
+      glow.emissive.copy(nightWindowColor);
+      glow.emissiveIntensity = 0;
+      windowMaterials.set(source, glow);
+      windowGlows.push({ material: glow, dayColor: source.color });
+    }
+    pane.material = glow;
+    return pane;
+  }
+
   function window(parent, x, y, z, side = false) {
     const frame = new THREE.Group();
     frame.position.set(x, y, z);
     if (side) frame.rotation.y = Math.PI / 2;
     parent.add(frame);
     box(frame, 0xfff8df, 0, 0, 0, 1.92, 2.05, 0.16);
-    box(frame, 0x97dceb, 0, 0, 0.1, 1.57, 1.7, 0.08);
+    registerWindow(box(frame, 0x97dceb, 0, 0, 0.1, 1.57, 1.7, 0.08));
     box(frame, 0xfff8df, 0, 0, 0.16, 0.105, 1.75, 0.06);
     box(frame, 0xfff8df, 0, 0, 0.16, 1.65, 0.105, 0.06);
     box(frame, 0xfff8df, 0, -1.08, 0.12, 2.12, 0.14, 0.35);
     return frame;
   }
-  const homeContext = { exterior, interior, place, box, ball, cylinder, rod, material, window, collider, interact };
+  const homeContext = { exterior, interior, place, box, ball, cylinder, rod, material, window, registerWindow, collider, interact };
   const { exteriorSpawn, approach } = buildHomeExterior(homeContext);
   const mailbox = place(exterior, 5.8, 6.7);
   cylinder(mailbox, 0xf3eee0, 0, 0.7, 0, 0.12, 1.4);
   box(mailbox, 0x62a7bd, 0, 1.6, 0, 0.95, 0.65, 0.65);
   box(mailbox, 0xffefd1, 0, 1.67, 0.34, 0.55, 0.07, 0.025);
   box(mailbox, COLORS.coral, 0.57, 1.94, 0, 0.17, 0.55, 0.12);
+
+  const practicalGlass = material(0xffedc8, practicalGlow);
+  function pathLamp(x, z, name) {
+    const fixture = place(exterior, x, z);
+    fixture.name = name;
+    cylinder(fixture, COLORS.teal, 0, 0.12, 0, 0.24, 0.24);
+    cylinder(fixture, COLORS.teal, 0, 1.35, 0, 0.075, 2.7);
+    cylinder(fixture, COLORS.teal, 0, 2.68, 0, 0.32, 0.12);
+    const bulb = ball(fixture, 0xffedc8, 0, 3.02, 0, 0.25, 0.34, 0.25, practicalGlow);
+    bulb.castShadow = false;
+    mesh(fixture, geometry.cone, COLORS.teal, 0, 3.42, 0, 0.46, 0.25, 0.46);
+    ball(fixture, COLORS.teal, 0, 3.59, 0, 0.085);
+    const light = new THREE.PointLight(0xffd394, 0, 12, 2);
+    light.position.set(0, 3.02, 0);
+    light.castShadow = false;
+    fixture.add(light);
+    practicalLights.push(light);
+  }
+  pathLamp(9.8, 5.6, 'Entrance path lamp');
 
   function fence(points) {
     for (let i = 0; i < points.length; i++) {
@@ -564,6 +603,7 @@ export function createWorld() {
   collider(23, -20, 3.75, 2.75);
   interact('picnic', 'picnic', '准备家庭野餐', 23, -20, picnic, 'outside', 3.3);
   sign(exterior, 16, -20, '星光营地', 0x8b91b5, 2.3);
+  pathLamp(20.7, -23.5, 'Camp path lamp');
 
   // A shallow pond with reeds and three modelled ducks.
   groundPatch(exterior, -21, 34, 6.2, 4.85, 0xcfdb9b, 0.04);
@@ -696,6 +736,16 @@ export function createWorld() {
     }
     for (const wave of wavelets) wave.mesh.position.x = wave.x + Math.sin(time * 0.6 + wave.phase) * 0.45;
   }
+  function setNight(amount) {
+    const night = clamp(amount, 0, 1);
+    for (let i = 0; i < windowGlows.length; i++) {
+      const glow = windowGlows[i];
+      glow.material.color.copy(glow.dayColor).lerp(nightWindowColor, night);
+      glow.material.emissiveIntensity = night * 0.55;
+    }
+    practicalGlass.emissiveIntensity = night * 0.85;
+    for (let i = 0; i < practicalLights.length; i++) practicalLights[i].intensity = night * 28;
+  }
   function setZone(zone, floor = 0) {
     exterior.visible = zone !== 'inside';
     interior.visible = zone === 'inside';
@@ -704,6 +754,6 @@ export function createWorld() {
   return {
     group, exterior, interior, terrainHeight, colliders, interactables,
     spawn: { x: 0, z: 13 }, interiorSpawn: floorSpawns[0], exteriorSpawn,
-    floorSpawns, floorNames, bounds, locations, update, setZone,
+    floorSpawns, floorNames, bounds, locations, update, setZone, setNight,
   };
 }

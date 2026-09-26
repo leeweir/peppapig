@@ -27,6 +27,8 @@
     <symbol id="i-hand" viewBox="0 0 24 24"><path d="M8 13V5a2 2 0 0 1 4 0v7-9a2 2 0 0 1 4 0v10-6a2 2 0 0 1 4 0v9c0 5-5 7-9 5l-7-7a2 2 0 0 1 3-3l1 2Z"/></symbol>
     <symbol id="i-home" viewBox="0 0 24 24"><path d="m2 11 10-9 10 9M5 9v12h14V9M9 21v-8h6v8"/></symbol>
     <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l2 2m10 10 2 2M5 19l2-2m10-10 2-2"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.8 14.2A9 9 0 0 1 9.8 3.1a9 9 0 1 0 11 11.1Z"/></symbol>
+    <symbol id="i-cycle" viewBox="0 0 24 24"><path d="M20 8a8 8 0 0 0-14-2L3 9m0-6v6h6M4 16a8 8 0 0 0 14 2l3-3m0 6v-6h-6"/></symbol>
   </defs></svg>
   <main id="game" aria-label="佩奇的3D假期世界">
     <canvas id="world-canvas" tabindex="0" aria-label="3D冒险场景。WASD或方向键移动，空格跳跃，E互动，拖动画面转动视角。"></canvas>
@@ -34,7 +36,7 @@
     <div class="game-hud" id="hud" hidden>
       <header class="top-bar">
         <a href="%BASE_URL%" class="game-brand" aria-label="佩奇的完美假期首页"><span class="brand-bubble">小猪佩奇<small>Peppa Pig</small></span><span class="brand-title">完美假期<small>3D 快乐冒险</small></span></a>
-        <div class="world-status"><span class="live-dot"></span><span id="region-name">佩奇的家</span><svg class="icon"><use href="#i-sun"/></svg><span id="time-label">晴朗的早晨</span></div>
+        <div class="world-status"><span class="live-dot"></span><span id="region-name">佩奇的家</span><button id="time-button" aria-label="昼夜设置" aria-haspopup="dialog" title="切换白天、夜晚或自动交替"><svg class="icon" aria-hidden="true"><use id="time-symbol" href="#i-sun"/></svg><span id="time-label">白天 · 自动</span></button></div>
         <div class="top-actions">
           <button id="journal-button" class="progress-button" title="任务手册 J"><svg class="icon"><use href="#i-star"/></svg><b id="quest-count">0</b><span>/ 14</span></button>
           <button id="album-button" class="round-button" title="假期相册 P" aria-label="打开假期相册"><svg class="icon"><use href="#i-camera"/></svg></button>
