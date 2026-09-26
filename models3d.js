@@ -20,6 +20,8 @@ function matte(color) {
   return materials.get(color);
 }
 
+const headPosition = [0, 1.91, 0.015];
+const headScale = [0.64, 0.60, 0.54];
 const sphereGeometry = new THREE.SphereGeometry(1, 20, 14);
 const cylinderGeometry = new THREE.CylinderGeometry(1, 1, 1, 20);
 const glassesGeometry = new THREE.TorusGeometry(1, 0.075, 6, 28);
@@ -66,13 +68,29 @@ function tube(points, radius, segments = 24) {
   );
 }
 
-const smileGeometry = tube([
-  [-0.30, 1.78, 0.56],
-  [-0.21, 1.65, 0.59],
-  [0, 1.60, 0.60],
-  [0.21, 1.65, 0.59],
-  [0.30, 1.78, 0.56],
-], 0.022, 20);
+// A thin smile follows the lower face, rather than floating in front of the muzzle.
+const smileSegments = 32;
+const smileVertices = new Float32Array((smileSegments + 1) * 6);
+const smileIndices = [];
+for (let i = 0; i <= smileSegments; i++) {
+  const t = i / smileSegments * 2 - 1;
+  const x = 0.32 * t;
+  const centerY = 1.52 + 0.14 * t * t;
+  const halfWidth = 0.015 * (0.35 + 0.65 * Math.sin(Math.PI * i / smileSegments));
+  for (let edge = 0; edge < 2; edge++) {
+    const y = centerY + (edge * 2 - 1) * halfWidth;
+    const z = headPosition[2] + headScale[2] * Math.sqrt(1 - (x / headScale[0]) ** 2 - ((y - headPosition[1]) / headScale[1]) ** 2) + 0.003;
+    smileVertices.set([x, y, z], i * 6 + edge * 3);
+  }
+  if (i < smileSegments) {
+    const a = i * 2;
+    smileIndices.push(a, a + 2, a + 1, a + 2, a + 3, a + 1);
+  }
+}
+const smileGeometry = new THREE.BufferGeometry();
+smileGeometry.setAttribute('position', new THREE.BufferAttribute(smileVertices, 3));
+smileGeometry.setIndex(smileIndices);
+smileGeometry.computeVertexNormals();
 const tailGeometry = tube([
   [0, 0.99, -0.58],
   [0.09, 1.00, -0.68],
@@ -120,13 +138,13 @@ export function createPig({ dress = 0xe95a76, scale = 1, glasses = false, boots 
   pig.userData.arms = [];
 
   mesh(pig, dressGeometry, matte(dress), [0, 0, 0]);
-  ellipsoid(pig, PALETTE.pink, [0, 1.91, 0.015], [0.64, 0.60, 0.54]);
+  ellipsoid(pig, PALETTE.pink, headPosition, headScale);
 
   // Keep the muzzle on the head's forward axis so it reads correctly from every angle.
-  ellipsoid(pig, PALETTE.pink, [0, 1.92, 0.52], [0.40, 0.27, 0.43]);
-  ellipsoid(pig, PALETTE.snout, [0, 1.935, 0.90], [0.325, 0.225, 0.066]);
+  ellipsoid(pig, PALETTE.pink, [0, 1.98, 0.46], [0.37, 0.235, 0.345]);
+  ellipsoid(pig, PALETTE.snout, [0, 1.995, 0.77], [0.30, 0.20, 0.055]);
   for (const x of [-0.13, 0.13]) {
-    ellipsoid(pig, 0xbe608a, [x, 1.945, 0.958], [0.033, 0.048, 0.019], false);
+    ellipsoid(pig, 0xbe608a, [x, 2.005, 0.824], [0.033, 0.043, 0.016], false);
   }
 
   const eyePositions = [[-0.25, 2.245, 0.48], [0.25, 2.245, 0.48]];
