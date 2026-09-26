@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { createPig, createCar } from './models3d.js';
+import { buildHomeExterior } from './home-exterior.js';
+import { buildHomeInterior } from './home-interior.js';
 
 const COLORS = {
   grass: 0x91c861, sand: 0xf4dfa0, cream: 0xffefc1, yellow: 0xf8d866,
@@ -62,8 +64,8 @@ export function createWorld() {
     result.quaternion.setFromUnitVectors(UP, direction.normalize());
     return result;
   }
-  function terrainHeight(x, z) {
-    if (x > 90) return 0;
+  function terrainHeight(x, z, floor = 0) {
+    if (x > 90) return floor * 4.8;
     const home = 2.9 * Math.exp(-(x * x / 360 + z * z / 300));
     const north = 1.35 * Math.exp(-((x + 24) ** 2 / 420 + (z + 22) ** 2 / 350));
     const camp = 1.15 * Math.exp(-((x - 19) ** 2 / 210 + (z + 23) ** 2 / 270));
@@ -79,12 +81,12 @@ export function createWorld() {
     parent.add(result);
     return result;
   }
-  function collider(x, z, width, depth, zone = 'outside') {
-    colliders.push({ minX: x - width / 2, maxX: x + width / 2, minZ: z - depth / 2, maxZ: z + depth / 2, zone });
+  function collider(x, z, width, depth, zone = 'outside', floor = 0) {
+    colliders.push({ minX: x - width / 2, maxX: x + width / 2, minZ: z - depth / 2, maxZ: z + depth / 2, zone, floor });
   }
-  function interact(id, type, label, x, z, object, zone = 'outside', radius = 2.4) {
+  function interact(id, type, label, x, z, object, zone = 'outside', radius = 2.4, floor = 0) {
     object.name = id;
-    const item = { id, type, label, position: new THREE.Vector3(x, terrainHeight(x, z), z), zone, radius, mesh: object };
+    const item = { id, type, label, position: new THREE.Vector3(x, terrainHeight(x, z, floor), z), zone, floor, radius, mesh: object };
     interactables.push(item);
     return item;
   }
@@ -198,23 +200,6 @@ export function createWorld() {
   path([[-8, 13], [-10, 22], [-15, 27], [-18, 29]], 1.9);
   path([[33, 3], [32, 11], [33, 22], [34, 32]], 1.3);
 
-  // The familiar tall yellow house: two window rows, red gable, chimney and garden.
-  const house = place(exterior, 0, 0);
-  box(house, 0xe7ce96, 0, 0.12, 0, 10.1, 0.35, 10);
-  box(house, COLORS.yellow, 0, 4.45, 0, 9.5, 8.8, 9.4);
-  const roofShape = new THREE.Shape();
-  roofShape.moveTo(-5.45, 8.85);
-  roofShape.lineTo(0, 12.25);
-  roofShape.lineTo(5.45, 8.85);
-  roofShape.closePath();
-  const roof = new THREE.Mesh(new THREE.ExtrudeGeometry(roofShape, { depth: 10.6, bevelEnabled: false }), material(COLORS.coral));
-  roof.position.z = -5.3;
-  roof.castShadow = true;
-  roof.receiveShadow = true;
-  house.add(roof);
-  box(house, 0xcf6261, 2.6, 11.5, -1.8, 1.2, 3.3, 1.15);
-  box(house, 0xf19479, 2.6, 13.14, -1.8, 1.48, 0.28, 1.4);
-  box(house, 0x705758, 2.6, 13.29, -1.8, 0.9, 0.035, 0.82);
   function window(parent, x, y, z, side = false) {
     const frame = new THREE.Group();
     frame.position.set(x, y, z);
@@ -225,25 +210,10 @@ export function createWorld() {
     box(frame, 0xfff8df, 0, 0, 0.16, 0.105, 1.75, 0.06);
     box(frame, 0xfff8df, 0, 0, 0.16, 1.65, 0.105, 0.06);
     box(frame, 0xfff8df, 0, -1.08, 0.12, 2.12, 0.14, 0.35);
+    return frame;
   }
-  for (const x of [-2.85, 2.85]) {
-    window(house, x, 2.8, 4.77);
-    window(house, x, 6.6, 4.77);
-  }
-  for (const z of [-2.65, 2.65]) {
-    window(house, 4.79, 3, z, true);
-    window(house, 4.79, 6.6, z, true);
-  }
-  const door = place(exterior, 0, 5.7);
-  const doorGroundOffset = house.position.y - door.position.y;
-  box(door, 0xfff3d2, 0, 1.72 + doorGroundOffset, -0.88, 2.28, 3.44, 0.2);
-  box(door, 0xc56c5d, 0, 1.65 + doorGroundOffset, -0.73, 1.87, 3.25, 0.13);
-  box(door, 0xda8a71, 0, 2.45 + doorGroundOffset, -0.64, 1.3, 1.08, 0.045);
-  box(door, 0xda8a71, 0, 0.9 + doorGroundOffset, -0.64, 1.3, 1.1, 0.045);
-  ball(door, 0xffd773, 0.61, 1.54 + doorGroundOffset, -0.55, 0.12);
-  box(door, 0xf5e4b8, 0, 0.09, -0.17, 2.5, 0.18, 1.5);
-  interact('home-door', 'door', '走进佩奇家', 0, 5.7, door);
-  collider(0, -0.15, 9.6, 9.55);
+  const homeContext = { exterior, interior, place, box, ball, cylinder, rod, material, window, collider, interact };
+  const { exteriorSpawn, approach } = buildHomeExterior(homeContext);
   const mailbox = place(exterior, 5.8, 6.7);
   cylinder(mailbox, 0xf3eee0, 0, 0.7, 0, 0.12, 1.4);
   box(mailbox, 0x62a7bd, 0, 1.6, 0, 0.95, 0.65, 0.65);
@@ -282,7 +252,7 @@ export function createWorld() {
 
   // Family members are full characters, not interaction markers.
   for (const [id, label, x, z, dress, scale, glasses] of [
-    ['mom', '猪妈妈', -4, 8, 0xef9754, 1.16, false],
+    ['mom', '猪妈妈', -5.8, 10, 0xef9754, 1.16, false],
     ['dad', '猪爸爸', 7, 9, 0x56aeb1, 1.35, true],
     ['george', '乔治', -8, 12, 0x6b9fe5, 0.7, false],
     ['grandpa', '猪爷爷', -22, 9, 0x9074bb, 1.2, false],
@@ -701,180 +671,16 @@ export function createWorld() {
     if (i % 4 === 0) flower(tuft, 0.35, 0, 0, 0xfff0b2, 0.55);
   }
 
-  // A separately positioned open-front dollhouse, with traversable room gaps.
-  const homeInside = place(interior, 120, 0, 0);
-  box(homeInside, 0xebd9af, 0, -0.13, 0, 20, 0.26, 16);
-  box(homeInside, 0xf9e7b5, 0, 1.15, -7.9, 20, 2.3, 0.2);
-  box(homeInside, 0xf7dfaa, -9.9, 0.8, 0, 0.2, 1.6, 16);
-  box(homeInside, 0xf2d6b3, 9.9, 0.8, 0, 0.2, 1.6, 16);
-  for (let i = -9; i <= 9; i++) box(homeInside, 0xdfc99e, i, 0.006, 0, 0.018, 0.008, 15.8);
-  box(homeInside, 0xd7e4bf, -5.2, 0.017, -4.15, 9.3, 0.022, 7.35);
-  for (let x = -9; x <= -1; x++) {
-    for (let z = -7; z <= -1; z++) {
-      if ((x + z) % 2 === 0) box(homeInside, 0xe7edcf, x, 0.034, z, 0.94, 0.012, 0.94);
-    }
-  }
-  box(homeInside, 0xeccdd4, 5.45, 0.025, -3.0, 8.7, 0.025, 9.2);
-  // Partitions stop short of the wide central hallway and never enclose pickups.
-  box(homeInside, 0xf9e3b4, -0.6, 0.65, -5.1, 0.18, 1.3, 5.6);
-  box(homeInside, 0xf5d4b9, 6.7, 0.52, 2.0, 6.45, 1.04, 0.18);
-  box(homeInside, 0xf8e5bb, -6.9, 0.47, -0.25, 5.8, 0.94, 0.16);
-  collider(119.4, -5.1, 0.18, 5.6, 'inside');
-  collider(126.7, 2, 6.45, 0.18, 'inside');
-  collider(113.1, -0.25, 5.8, 0.16, 'inside');
-  collider(120, -7.9, 20, 0.2, 'inside');
-  collider(110.1, 0, 0.2, 16, 'inside');
-  collider(129.9, 0, 0.2, 16, 'inside');
-  window(homeInside, -5.8, 1.55, -7.72);
-  window(homeInside, 5.6, 1.55, -7.72);
-
-  const sofa = place(interior, 113.2, 1.6, 0);
-  box(sofa, 0xda858c, 0, 0.47, 0, 4.35, 0.73, 1.65);
-  box(sofa, 0xe695a0, 0, 1.15, -0.64, 4.35, 1.12, 0.44);
-  for (const side of [-1, 1]) box(sofa, 0xe695a0, side * 2.02, 0.92, 0, 0.4, 0.86, 1.65);
-  for (const x of [-1.24, 0, 1.24]) box(sofa, 0xeea4ab, x, 0.88, 0.1, 1.15, 0.19, 1.08);
-  box(sofa, 0xffd78f, -1.3, 1.24, -0.34, 0.65, 0.61, 0.2).rotation.z = 0.15;
-  box(sofa, 0x8ebfc4, 1.27, 1.24, -0.34, 0.65, 0.61, 0.2).rotation.z = -0.15;
-  collider(113.2, 1.6, 4.35, 1.65, 'inside');
-  const rug = box(interior, 0x95c4c6, 115.4, 0.035, 5.5, 5.8, 0.03, 3.3);
-  box(interior, 0xd6e8ce, 115.4, 0.055, 5.5, 5.25, 0.012, 2.75);
-  box(interior, 0x95c4c6, 115.4, 0.067, 5.5, 4.75, 0.012, 2.25);
-  rug.receiveShadow = true;
-  const tv = place(interior, 117.6, 1.6, 0);
-  box(tv, 0xbf9567, 0, 0.55, 0, 1.25, 1.1, 0.8);
-  box(tv, COLORS.teal, 0, 1.8, 0, 1.6, 1.2, 0.25);
-  box(tv, 0x90cddd, 0, 1.8, 0.14, 1.35, 0.96, 0.03);
-  ball(tv, 0xffe493, 0.35, 2.03, 0.17, 0.18, 0.18, 0.03);
-  ball(tv, 0x9ecb83, -0.25, 1.46, 0.18, 0.52, 0.29, 0.03);
-  rod(tv, COLORS.teal, [0, 2.45, 0], [-0.32, 2.83, 0], 0.024);
-  rod(tv, COLORS.teal, [0, 2.45, 0], [0.34, 2.8, 0], 0.024);
-  collider(117.6, 1.6, 1.3, 0.85, 'inside');
-
-  const kitchen = place(interior, 114.6, -6.65, 0);
-  box(kitchen, 0x9dc7bc, 0, 0.78, 0, 6.4, 1.55, 1.25);
-  box(kitchen, 0xfff2d9, 0, 1.6, 0, 6.6, 0.16, 1.4);
-  for (const x of [-2.5, -1.3, -0.1, 1.1, 2.3]) {
-    box(kitchen, 0xbcd9c8, x, 0.79, 0.646, 1.05, 1.18, 0.05);
-    box(kitchen, 0xffefd4, x + 0.26, 1.1, 0.704, 0.26, 0.055, 0.07);
-  }
-  box(kitchen, 0x677e81, -2.0, 1.704, 0, 1.4, 0.045, 1.0);
-  for (const x of [-2.32, -1.68]) {
-    for (const z of [-0.27, 0.27]) cylinder(kitchen, 0x314f56, x, 1.741, z, 0.2, 0.025);
-  }
-  box(kitchen, 0x526a70, -2.0, 0.76, 0.7, 1.0, 0.68, 0.035);
-  box(kitchen, 0x97b7b9, -2.0, 0.81, 0.728, 0.78, 0.42, 0.02);
-  box(kitchen, 0xbed4d2, 0.65, 1.708, 0, 1.42, 0.06, 0.91);
-  box(kitchen, 0x789da6, 0.65, 1.745, 0, 1.13, 0.025, 0.68);
-  rod(kitchen, 0xd9dfd6, [0.65, 1.72, -0.4], [0.65, 2.2, -0.4], 0.052);
-  rod(kitchen, 0xd9dfd6, [0.65, 2.2, -0.4], [0.65, 2.2, -0.03], 0.052);
-  cylinder(kitchen, 0xe9a976, 2.2, 1.98, 0, 0.29, 0.52);
-  cylinder(kitchen, 0xffeccd, 2.2, 2.27, 0, 0.31, 0.07);
-  collider(114.6, -6.65, 6.6, 1.45, 'inside');
-  const fridge = place(interior, 111.3, -3.8, 0);
-  box(fridge, 0xe9edda, 0, 1.47, 0, 1.5, 2.94, 1.4);
-  box(fridge, 0xf9f4df, 0, 1.76, 0.735, 1.36, 2.1, 0.08);
-  box(fridge, 0xf9f4df, 0, 0.39, 0.735, 1.36, 0.58, 0.08);
-  box(fridge, 0x91b2ad, 0.48, 1.8, 0.81, 0.08, 0.57, 0.06);
-  box(fridge, 0xeba3a1, -0.26, 2.19, 0.79, 0.47, 0.48, 0.012);
-  collider(111.3, -3.8, 1.5, 1.5, 'inside');
-  const kitchenTable = place(interior, 116.4, -2.95, 0);
-  cylinder(kitchenTable, 0xedcb8e, 0, 1.32, 0, 1.25, 0.16);
-  cylinder(kitchenTable, 0xb69770, 0, 0.64, 0, 0.19, 1.28);
-  cylinder(kitchenTable, 0xb69770, 0, 0.12, 0, 0.71, 0.15);
-  cylinder(kitchenTable, 0xfff1d3, 0, 1.44, 0, 0.42, 0.055);
-  ball(kitchenTable, 0xe88d78, -0.12, 1.62, 0.03, 0.18);
-  ball(kitchenTable, 0xedc463, 0.16, 1.62, -0.03, 0.18);
-  collider(116.4, -2.95, 2.3, 2.3, 'inside');
-  for (const [x, z] of [[114.65, -2.6], [117.9, -2.6]]) {
-    const chair = place(interior, x, z, 0);
-    box(chair, 0xa4c5b5, 0, 0.7, 0, 0.75, 0.13, 0.72);
-    box(chair, 0xa4c5b5, 0, 1.15, -0.31, 0.75, 0.8, 0.11);
-    for (const a of [-0.27, 0.27]) for (const b of [-0.25, 0.25]) box(chair, 0xb59871, a, 0.34, b, 0.09, 0.68, 0.09);
-    collider(x, z, 0.75, 0.75, 'inside');
-  }
-
-  for (const [x, color, label] of [[123.3, 0xe69dac, '佩奇'], [127.35, 0x93b9d5, '乔治']]) {
-    const bed = place(interior, x, -0.5, 0);
-    box(bed, 0xf6e4bd, 0, 0.42, 0, 2.25, 0.72, 3.55);
-    box(bed, 0xfff1d5, 0, 0.86, 0, 2.1, 0.24, 3.35);
-    box(bed, color, 0, 1.02, 0.54, 2.1, 0.13, 2.16);
-    box(bed, 0xfffae9, 0, 1.08, -1.11, 1.48, 0.25, 0.7);
-    box(bed, color, 0, 1.15, -1.74, 2.3, 1.2, 0.16);
-    for (const side of [-1, 1]) ball(bed, 0xf5d395, side * 1.02, 1.8, -1.74, 0.15);
-    bed.name = `${label}的小床`;
-    collider(x, -0.5, 2.3, 3.6, 'inside');
-  }
-  const desk = place(interior, 126.8, -6.4, 0);
-  box(desk, 0xf0d198, 0, 1.12, 0, 3.3, 0.16, 1.2);
-  for (const x of [-1.4, 1.4]) for (const z of [-0.45, 0.45]) box(desk, 0xe7bd82, x, 0.53, z, 0.12, 1.06, 0.12);
-  for (let i = 0; i < 4; i++) box(desk, [0xe79b9d, 0x82b5c6, 0x9abd87, 0xeac96f][i], 0.55 + i * 0.29, 1.42, -0.18, 0.22, 0.46 + i % 2 * 0.12, 0.5);
-  collider(126.8, -6.4, 3.3, 1.2, 'inside');
-  const toyBox = place(interior, 128.4, 4.5, 0);
-  box(toyBox, 0xb3cca0, 0, 0.48, 0, 1.45, 0.95, 1.2);
-  box(toyBox, 0xe3deab, 0, 0.99, -0.25, 1.5, 0.12, 1.23).rotation.x = -0.5;
-  ball(toyBox, 0xeaa083, -0.22, 1.03, 0.15, 0.31);
-  box(toyBox, 0x8aaecb, 0.35, 1.04, 0.05, 0.38, 0.38, 0.38).rotation.z = 0.2;
-  collider(128.4, 4.5, 1.45, 1.2, 'inside');
-  const teddy = place(interior, 126, 4.4, 0);
-  ball(teddy, 0xbd8c64, 0, 0.48, 0, 0.36, 0.45, 0.3);
-  ball(teddy, 0xc99b73, 0, 1.03, 0, 0.34);
-  for (const side of [-1, 1]) {
-    ball(teddy, 0xbd8c64, side * 0.27, 1.3, 0, 0.14);
-    ball(teddy, 0xbd8c64, side * 0.32, 0.61, 0, 0.17, 0.31, 0.16);
-    ball(teddy, 0xbd8c64, side * 0.22, 0.18, 0.17, 0.18, 0.18, 0.24);
-    ball(teddy, COLORS.teal, side * 0.115, 1.1, 0.294, 0.036);
-  }
-  ball(teddy, 0xe4be96, 0, 0.96, 0.28, 0.18, 0.13, 0.1);
-  ball(teddy, COLORS.teal, 0, 1.0, 0.37, 0.05);
-  for (const [x, z, color] of [[122.1, 4.5, 0xe69bac], [122.8, 4.1, 0xeccc79], [122.5, 5, 0x90b9d0]]) box(interior, color, x, 0.19, z, 0.38, 0.38, 0.38).rotation.y = x;
-
-  const boots = place(interior, 114, 4, 0);
-  for (const side of [-1, 1]) {
-    cylinder(boots, 0xf5cb56, side * 0.3, 0.47, -0.07, 0.235, 0.84);
-    ball(boots, 0xf5cb56, side * 0.3, 0.17, 0.19, 0.24, 0.17, 0.42);
-    cylinder(boots, 0xcb9b38, side * 0.3, 0.9, -0.07, 0.193, 0.026);
-    box(boots, 0xdeaf46, side * 0.3, 0.045, 0.17, 0.46, 0.075, 0.7);
-  }
-  interact('boots', 'pickup', '穿上黄色雨靴', 114, 4, boots, 'inside');
-  const camera = place(interior, 125, -5, 0);
-  box(camera, 0xe6a46e, 0, 0.45, 0, 1.06, 0.75, 0.4);
-  box(camera, 0x506872, 0, 0.49, 0.23, 0.98, 0.46, 0.06);
-  const cameraLens = cylinder(camera, 0x314f5b, 0.1, 0.47, 0.39, 0.3, 0.26);
-  cameraLens.rotation.x = Math.PI / 2;
-  const glassLens = cylinder(camera, 0xa6d6de, 0.1, 0.47, 0.536, 0.19, 0.024);
-  glassLens.rotation.x = Math.PI / 2;
-  box(camera, 0xfff1d6, -0.31, 0.89, 0, 0.23, 0.14, 0.24);
-  rod(camera, 0x7c6f74, [-0.5, 0.7, 0], [-0.7, 1.1, -0.05], 0.025);
-  rod(camera, 0x7c6f74, [-0.7, 1.1, -0.05], [0.64, 1.1, -0.05], 0.025);
-  rod(camera, 0x7c6f74, [0.64, 1.1, -0.05], [0.5, 0.7, 0], 0.025);
-  interact('camera', 'pickup', '带上相机', 125, -5, camera, 'inside');
-  const exit = place(interior, 120, 7, 0);
-  box(exit, 0xc9b38b, 0, 0.028, 0, 2.3, 0.04, 1.1);
-  box(exit, 0xf6e9c4, 0, 0.054, 0, 1.96, 0.015, 0.78);
-  const arrow = new THREE.Shape();
-  arrow.moveTo(-0.25, -0.25);
-  arrow.lineTo(0.25, -0.25);
-  arrow.lineTo(0.25, 0.02);
-  arrow.lineTo(0.52, 0.02);
-  arrow.lineTo(0, 0.42);
-  arrow.lineTo(-0.52, 0.02);
-  arrow.lineTo(-0.25, 0.02);
-  arrow.closePath();
-  const exitArrow = new THREE.Mesh(new THREE.ShapeGeometry(arrow), material(0x8f9e79, { side: THREE.DoubleSide }));
-  exitArrow.rotation.x = Math.PI / 2;
-  exitArrow.position.y = 0.066;
-  exit.add(exitArrow);
-  interact('home-exit', 'door', '回到花园', 120, 7, exit, 'inside');
-  const indoorLight = new THREE.PointLight(0xffe7bb, 45, 27, 1.6);
-  indoorLight.position.set(120, 7, 0);
-  interior.add(indoorLight);
+  const homeInterior = buildHomeInterior(homeContext);
+  const floorSpawns = homeInterior.floors.map(item => item.spawn);
+  const floorNames = homeInterior.floors.map(item => item.name);
 
   const bounds = {
     outside: { minX: -47, maxX: 46, minZ: -43, maxZ: 44 },
-    inside: { minX: 110, maxX: 130, minZ: -8, maxZ: 8 },
+    inside: homeInterior.bounds,
   };
   const locations = [
-    { id: 'home', name: '佩奇的家', x: 0, z: 0, color: '#f8d866' },
+    { id: 'home', name: '佩奇的家', x: approach.x, z: approach.z, color: '#f8d866' },
     { id: 'garden', name: '爷爷的花园', x: -25, z: 6, color: '#a3c778' },
     { id: 'playground', name: '山坡游乐场', x: -23, z: -21, color: '#e99586' },
     { id: 'beach', name: '阳光海滩', x: 36, z: 19, color: '#75c2d1' },
@@ -890,13 +696,14 @@ export function createWorld() {
     }
     for (const wave of wavelets) wave.mesh.position.x = wave.x + Math.sin(time * 0.6 + wave.phase) * 0.45;
   }
-  function setZone(zone) {
+  function setZone(zone, floor = 0) {
     exterior.visible = zone !== 'inside';
     interior.visible = zone === 'inside';
+    homeInterior.floors.forEach((item, index) => { item.group.visible = index === floor; });
   }
   return {
     group, exterior, interior, terrainHeight, colliders, interactables,
-    spawn: { x: 0, z: 13 }, interiorSpawn: { x: 120, z: 5 }, exteriorSpawn: { x: 0, z: 8 },
-    bounds, locations, update, setZone,
+    spawn: { x: 0, z: 13 }, interiorSpawn: floorSpawns[0], exteriorSpawn,
+    floorSpawns, floorNames, bounds, locations, update, setZone,
   };
 }

@@ -12,12 +12,12 @@ export const QUESTS = [
   {
     id: 'packing',
     title: '出发前的准备',
-    description: '从黄色小屋的门进去，带上雨靴和相机，再回到院子。',
+    description: '从黄色入户门进家，一楼拿雨靴，再沿楼梯去阁楼的佩奇房间拿相机。',
     character: '猪妈妈',
-    dialogue: ['雨靴让小脚放心玩，相机把开心留下来。', '它们都在屋子里，找齐了就可以出发啦！'],
+    dialogue: ['雨靴让小脚放心玩，相机把开心留下来。', '雨靴在一楼门厅，相机在阁楼。靠近楼梯按 E 或点互动，就能上下楼啦！'],
     objectives: [
-      { key: 'collect:boots', label: '进屋拿起 1 双雨靴', total: 1, targets: ['boots'] },
-      { key: 'collect:camera', label: '在屋里拿起 1 台相机', total: 1, targets: ['camera'] },
+      { key: 'collect:boots', label: '在一楼门厅拿起 1 双雨靴', total: 1, targets: ['boots'] },
+      { key: 'collect:camera', label: '去阁楼的佩奇房间拿相机', total: 1, targets: ['camera'] },
     ],
   },
   {

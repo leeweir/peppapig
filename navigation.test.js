@@ -28,3 +28,26 @@ test('walking reaches the picnic interaction edge without crossing its table', (
     previous = point;
   }
 });
+
+test('an upstairs route ignores downstairs walls but still avoids its own furniture', () => {
+  const navigator = createNavigator([
+    { minX: 119, maxX: 121, minZ: -8, maxZ: 8, zone: 'inside', floor: 0 },
+    { minX: 118, maxX: 122, minZ: -2, maxZ: 2, zone: 'inside', floor: 1 },
+  ], bounds);
+  const start = { x: 112, z: 0 };
+  const destination = { x: 128, z: 0 };
+  assert.equal(navigator.pathTo(start, destination, 'inside', 1, 0), null);
+  const path = navigator.pathTo(start, destination, 'inside', 1, 1);
+  assert.ok(path, 'the upper floor must remain reachable across the downstairs dividing wall');
+  const end = path.at(-1);
+  assert.ok(Math.hypot(end.x - destination.x, end.z - destination.z) <= 1 + 1e-9);
+  let previous = start;
+  for (const point of path) {
+    const steps = Math.ceil(Math.hypot(point.x - previous.x, point.z - previous.z) / .05);
+    for (let step = 0; step <= steps; step++) {
+      const t = steps ? step / steps : 0;
+      assert.ok(navigator.canStand(previous.x + (point.x - previous.x) * t, previous.z + (point.z - previous.z) * t, 'inside', 1), 'upstairs walking must never pass through upstairs furniture');
+    }
+    previous = point;
+  }
+});

@@ -63,16 +63,17 @@ function boot() {
   let photos = Array.isArray(saved?.photos) ? saved.photos.filter(photo => typeof photo.id === 'string' && typeof photo.data === 'string' && photo.data.startsWith('data:image/jpeg;base64,')).slice(-8) : [];
   let soundEnabled = saved?.sound === true;
   let zone = saved?.zone === 'inside' ? 'inside' : 'outside';
+  let floor = zone === 'inside' && Number.isInteger(saved?.floor) && saved.floor >= 0 && saved.floor < world.floorSpawns.length ? saved.floor : 0;
   const actor = new THREE.Group();
   let avatar = createPig({ boots: actions.has('boots') });
   actor.add(avatar);
   scene.add(actor);
-  const spawn = zone === 'inside' ? world.interiorSpawn : world.spawn;
+  const spawn = zone === 'inside' ? world.floorSpawns[floor] : world.spawn;
   const position = saved?.position;
-  if (position && Number.isFinite(position.x) && Number.isFinite(position.z) && navigator.canStand(position.x, position.z, zone)) actor.position.set(position.x, world.terrainHeight(position.x, position.z), position.z);
-  else actor.position.set(spawn.x, world.terrainHeight(spawn.x, spawn.z), spawn.z);
+  if (position && Number.isFinite(position.x) && Number.isFinite(position.z) && navigator.canStand(position.x, position.z, zone, floor)) actor.position.set(position.x, world.terrainHeight(position.x, position.z, floor), position.z);
+  else actor.position.set(spawn.x, world.terrainHeight(spawn.x, spawn.z, floor), spawn.z);
   actor.rotation.y = Math.PI;
-  world.setZone(zone);
+  world.setZone(zone, floor);
   const car = registry.get('car');
   if (saved?.car && Number.isFinite(saved.car.x) && Number.isFinite(saved.car.z) && navigator.canStand(saved.car.x, saved.car.z, 'outside')) {
     car.position.set(saved.car.x, world.terrainHeight(saved.car.x, saved.car.z), saved.car.z);
@@ -194,7 +195,7 @@ function boot() {
   }
 
   function save() {
-    const data = { version: 1, quest, actions: [...actions], photos, zone, position: { x: actor.position.x, z: actor.position.z }, car: { x: car.position.x, z: car.position.z }, sound: soundEnabled };
+    const data = { version: 1, quest, actions: [...actions], photos, zone, floor, position: { x: actor.position.x, z: actor.position.z }, car: { x: car.position.x, z: car.position.z }, sound: soundEnabled };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       $('#save-status').textContent = '冒险进度已自动保存';
@@ -246,6 +247,13 @@ function boot() {
   applyWorldState();
 
   function getObjective() { return getQuestProgress(quest).objectives.find(objective => !objective.done) || null; }
+  function approachTarget(object) {
+    if (!object) return null;
+    if (zone === 'outside') return object.zone === 'inside' ? registry.get('home-door') : object;
+    const destinationFloor = object.zone === 'outside' ? 0 : (object.floor ?? 0);
+    if (destinationFloor !== floor) return registry.get(`stairs-${floor}-${destinationFloor > floor ? 'up' : 'down'}`);
+    return object.zone === 'outside' ? registry.get('home-exit') : object;
+  }
   function resolveTarget() {
     const objective = getObjective();
     if (!objective) return null;
@@ -254,8 +262,7 @@ function boot() {
     const available = ids.map(id => registry.get(id)).filter(Boolean).filter(object => !actions.has(object.id) || !['pickup', 'collect', 'water', 'lantern'].includes(object.type));
     let selected = available.reduce((closest, object) => !closest || actor.position.distanceToSquared(object.position) < actor.position.distanceToSquared(closest.position) ? object : closest, null);
     if (!selected) selected = registry.get(ids[0]);
-    if (selected && selected.zone !== zone) return registry.get(zone === 'inside' ? 'home-exit' : 'home-door');
-    return selected;
+    return approachTarget(selected);
   }
 
   function updateQuestUI() {
@@ -283,7 +290,7 @@ function boot() {
     stuckTime = 0;
     $('#navigation-banner').hidden = false;
     $('#navigation-message').textContent = label;
-    const positions = points.map(point => new THREE.Vector3(point.x, world.terrainHeight(point.x, point.z) + .09, point.z));
+    const positions = points.map(point => new THREE.Vector3(point.x, world.terrainHeight(point.x, point.z, floor) + .09, point.z));
     routeGeometry.setFromPoints(positions);
     routeLine.computeLineDistances();
     routeLine.visible = true;
@@ -291,10 +298,10 @@ function boot() {
   function guideTo(object) {
     if (activity || cameraMode) return;
     if (!object) return;
-    if (object.zone && object.zone !== zone) object = registry.get(zone === 'inside' ? 'home-exit' : 'home-door');
+    object = approachTarget(object);
     const destination = object.position || object;
     const range = Math.max(.9, (object.radius || 2) - .55);
-    const points = navigator.pathTo(actor.position, destination, zone, range);
+    const points = navigator.pathTo(actor.position, destination, zone, range, floor);
     if (points === null) { toast('这边的小路有点绕', '试试用方向键绕过前面的物品，再按「带我过去」。'); return; }
     if (!points.length) { toast('已经到啦', object.type === 'puddle' ? '在泥坑里按空格跳起来！' : '按 E 或点「互动」，继续这段冒险。', 2.5); return; }
     showRoute(points, `前往${object.label || object.name || '地图上的小站'}，移动可停止`);
@@ -378,13 +385,14 @@ function boot() {
     $('#confirm-reset').onclick = () => { try { localStorage.removeItem(STORAGE_KEY); } catch { /* Reload still starts fresh if storage is blocked. */ } location.reload(); };
   }
 
-  function changeZone(nextZone, destination) {
+  function changeZone(nextZone, destination, nextFloor = 0) {
     stopRoute();
     endActivity(false);
     kiteFlying = false;
     zone = nextZone;
-    world.setZone(zone);
-    actor.position.set(destination.x, world.terrainHeight(destination.x, destination.z), destination.z);
+    floor = zone === 'inside' ? nextFloor : 0;
+    world.setZone(zone, floor);
+    actor.position.set(destination.x, world.terrainHeight(destination.x, destination.z, floor), destination.z);
     jumpHeight = jumpVelocity = 0;
     cameraDistance = zone === 'inside' ? 20 : mobile ? 24 : 25;
     cameraPitch = zone === 'inside' ? .78 : .48;
@@ -482,7 +490,7 @@ function boot() {
   }
 
   function enterCamera(object) {
-    if (!actions.has('camera')) { toast('还缺一台照相机', '先到家里的卧室拿上照相机吧。'); return; }
+    if (!actions.has('camera')) { toast('还缺一台照相机', '沿家里的楼梯去阁楼，在佩奇房间拿上照相机吧。'); return; }
     if (driving) { toast('先下车再拍照', '按 E 停车，选一个喜欢的角度。'); return; }
     stopRoute();
     cameraMode = { object };
@@ -531,8 +539,9 @@ function boot() {
     const object = nearest;
     stopRoute();
     if (object.type === 'door') { changeZone(zone === 'inside' ? 'outside' : 'inside', zone === 'inside' ? world.exteriorSpawn : world.interiorSpawn); sound(); return; }
+    if (object.type === 'stairs') { changeZone('inside', object.arrival, object.targetFloor); toast(world.floorNames[floor], '沿走廊看看新房间；靠近楼梯按 E 上下楼。', 3); sound(); return; }
     if (object.type === 'npc') {
-      if (object.id === 'mom') talk('猪妈妈', ['今天的天气真好！我们的完美假期，从家门口开始。', '先回家拿上雨靴和照相机吧。花园、游乐场和海边，还有好多快乐在等着你。'], () => emit('talk:mom'));
+      if (object.id === 'mom') talk('猪妈妈', ['今天的天气真好！我们的完美假期，从家门口开始。', '雨靴在一楼门厅，相机在阁楼的佩奇房间。走近楼梯按 E 就能上下楼，准备好了再去花园和海边玩吧！'], () => emit('talk:mom'));
       if (object.id === 'george') {
         if (actions.has('dinosaur')) talk('乔治', ['恐龙！你找到我的小恐龙啦！', '谢谢佩奇。我们一起带着恐龙去冒险吧！'], () => emit('return:dinosaur'));
         else talk('乔治', ['我的小恐龙不见了……', '刚才它还在花园附近。你能帮我找找吗？']);
@@ -773,8 +782,8 @@ function boot() {
     const beforeZ = actor.position.z;
     const nextX = beforeX + dx * speed * dt;
     const nextZ = beforeZ + dz * speed * dt;
-    if (navigator.canStand(nextX, beforeZ, zone)) actor.position.x = nextX;
-    if (navigator.canStand(actor.position.x, nextZ, zone)) actor.position.z = nextZ;
+    if (navigator.canStand(nextX, beforeZ, zone, floor)) actor.position.x = nextX;
+    if (navigator.canStand(actor.position.x, nextZ, zone, floor)) actor.position.z = nextZ;
     const distance = Math.hypot(actor.position.x - beforeX, actor.position.z - beforeZ);
     if (route && distance < .001) { stuckTime += dt; if (stuckTime > 1.5) { stopRoute(); toast('前面有个小障碍', '换一个方向走几步，再让小路带你过去。'); } } else stuckTime = 0;
     if (distance > .001) {
@@ -794,7 +803,7 @@ function boot() {
         }
       }
     }
-    actor.position.y = world.terrainHeight(actor.position.x, actor.position.z) + jumpHeight;
+    actor.position.y = world.terrainHeight(actor.position.x, actor.position.z, floor) + jumpHeight;
     const moving = distance > .001;
     const stride = moving ? Math.sin(walkTime) * .52 : 0;
     for (let index = 0; index < avatar.userData.legs.length; index++) avatar.userData.legs[index].rotation.x = THREE.MathUtils.damp(avatar.userData.legs[index].rotation.x, index ? -stride : stride, 15, dt);
@@ -836,7 +845,7 @@ function boot() {
     let closestScore = Infinity;
     if (!activity && !cameraMode && !driving) {
       for (const object of world.interactables) {
-        if (object.zone !== zone || !object.mesh.visible || object.type === 'arrival') continue;
+        if (object.zone !== zone || (object.floor ?? 0) !== floor || !object.mesh.visible || object.type === 'arrival') continue;
         const distance = Math.hypot(actor.position.x - object.position.x, actor.position.z - object.position.z);
         if (distance > object.radius) continue;
         const score = distance - (target?.id === object.id ? 1.2 : 0);
@@ -847,7 +856,7 @@ function boot() {
     prompt.hidden = Boolean((!nearest && !driving) || activity || cameraMode || dialog.open);
     if (driving) { $('#interaction-label').textContent = '停车下车'; $('#interaction-detail').textContent = '回到步行，继续探索'; }
     else if (nearest) {
-      const descriptions = { npc: '和家人聊聊今天的冒险', door: zone === 'inside' ? '走出小黄屋，继续探索' : '客厅、厨房和卧室都在里面', pickup: '拾起并放进小背包', collect: '收进你的假期小收藏', water: '给花坛浇水', puddle: '穿好雨靴，按空格跳起来', swing: '坐上秋千，按节奏推三次', slide: '爬上梯子，再滑下来', seesaw: '按空格，一起上下摇摆', car: '坐上汽车，方向键开车', kite: '拿起风筝，迎着风奔跑', build: '放下一桶沙，垒起一座塔', photo: '进入相机，再按 E 拍照', picnic: '摆好蔬菜，邀请家人', lantern: '点亮回家的小灯', fireworks: '一起仰望假期的星空', ducks: '把面包屑轻轻撒到水面' };
+      const descriptions = { npc: '和家人聊聊今天的冒险', door: zone === 'inside' ? '走出小黄屋，继续探索' : '一楼客厅与车库，楼上还有新房间', stairs: '按 E 或点互动，沿楼梯换一层', pickup: '拾起并放进小背包', collect: '收进你的假期小收藏', water: '给花坛浇水', puddle: '穿好雨靴，按空格跳起来', swing: '坐上秋千，按节奏推三次', slide: '爬上梯子，再滑下来', seesaw: '按空格，一起上下摇摆', car: '坐上汽车，方向键开车', kite: '拿起风筝，迎着风奔跑', build: '放下一桶沙，垒起一座塔', photo: '进入相机，再按 E 拍照', picnic: '摆好蔬菜，邀请家人', lantern: '点亮回家的小灯', fireworks: '一起仰望假期的星空', ducks: '把面包屑轻轻撒到水面' };
       $('#interaction-label').textContent = nearest.label;
       $('#interaction-detail').textContent = descriptions[nearest.type] || '按 E 一起玩吧';
     }
@@ -856,7 +865,7 @@ function boot() {
       $('#target-distance').textContent = distance < 3 ? '就在身边' : `距离 ${Math.round(distance)} 米`;
       $('#guide-button').dataset.target = target.id;
     } else { $('#target-distance').textContent = '想怎么玩，都可以'; delete $('#guide-button').dataset.target; }
-    let region = zone === 'inside' ? '小黄屋里面' : '佩奇的家';
+    let region = zone === 'inside' ? world.floorNames[floor] : '佩奇的家';
     if (zone === 'outside') {
       let distance = Infinity;
       for (const place of world.locations) { const d = Math.hypot(actor.position.x - place.x, actor.position.z - place.z); if (d < distance) { distance = d; region = place.name; } }
@@ -866,11 +875,40 @@ function boot() {
     canvas.dataset.x = actor.position.x.toFixed(2);
     canvas.dataset.z = actor.position.z.toFixed(2);
     canvas.dataset.zone = zone;
+    canvas.dataset.floor = String(floor);
+    canvas.dataset.y = actor.position.y.toFixed(2);
     canvas.dataset.mode = driving ? 'driving' : activity?.type || 'walking';
     drawMap(mapContext, 240, false);
   }
 
   function drawMap(context, size, large) {
+    if (zone === 'inside' && !large) {
+      const scale = size / 24;
+      const px = x => (x - 108) * scale;
+      const pz = z => (z + 12) * scale;
+      const bounds = world.bounds.inside;
+      context.clearRect(0, 0, size, size);
+      context.fillStyle = '#ded0e6'; context.fillRect(0, 0, size, size);
+      context.fillStyle = '#ffedb8'; context.fillRect(px(bounds.minX), pz(bounds.minZ), (bounds.maxX - bounds.minX) * scale, (bounds.maxZ - bounds.minZ) * scale);
+      context.fillStyle = '#ae97ae';
+      for (const wall of world.colliders) {
+        if (wall.zone === 'inside' && wall.floor === floor) context.fillRect(px(wall.minX), pz(wall.minZ), (wall.maxX - wall.minX) * scale, (wall.maxZ - wall.minZ) * scale);
+      }
+      for (const object of world.interactables) {
+        if (object.zone !== 'inside' || object.floor !== floor || !object.mesh.visible) continue;
+        const x = px(object.position.x), z = pz(object.position.z);
+        context.fillStyle = object === target ? '#f1ba36' : '#589fa4';
+        context.beginPath(); context.arc(x, z, .55 * scale, 0, Math.PI * 2); context.fill();
+        if (object.type === 'stairs') {
+          context.fillStyle = '#fff'; context.font = `bold ${scale}px sans-serif`; context.textAlign = 'center'; context.textBaseline = 'middle';
+          context.fillText(object.targetFloor > floor ? '↑' : '↓', x, z);
+        }
+      }
+      context.save(); context.translate(px(actor.position.x), pz(actor.position.z)); context.rotate(-actor.rotation.y + Math.PI);
+      context.fillStyle = '#e25e90'; context.strokeStyle = '#fff'; context.lineWidth = 1.5;
+      context.beginPath(); context.moveTo(0, -.65 * scale); context.lineTo(.48 * scale, .45 * scale); context.lineTo(-.48 * scale, .45 * scale); context.closePath(); context.fill(); context.stroke(); context.restore();
+      return;
+    }
     const scale = size / 106;
     const px = x => (x + 53) * scale;
     const pz = z => (z + 51) * scale;
@@ -903,10 +941,10 @@ function boot() {
     skyLight.intensity = 2.5 - night * 1.2;
     sun.intensity = 2.8 - night * 2.4;
     sun.color.set(0xfff3d4).lerp(particleColor.set(0xc1d1ff), night);
-    if (zone === 'inside') { sun.position.set(105, 45, 32); sun.target.position.set(120, 0, 0); }
+    if (zone === 'inside') { const height = world.terrainHeight(120, 0, floor); sun.position.set(105, 45 + height, 32); sun.target.position.set(120, height, 0); }
     else { sun.position.set(actor.position.x - 25, 48, actor.position.z + 32); sun.target.position.set(actor.position.x, 0, actor.position.z); }
     $('#time-label').textContent = night > .7 ? '星光下的假期' : night > .12 ? '暖暖的傍晚' : '晴朗的早晨';
-    if (target && target.zone === zone && !cameraMode) {
+    if (target && target.zone === zone && (target.floor ?? 0) === floor && !cameraMode) {
       marker.visible = true;
       marker.position.copy(target.position);
       diamond.position.y = 4.5 + (reducedMotion ? 0 : Math.sin(simTime * 2.5) * .16);
