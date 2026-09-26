@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="theme-color" content="#a9dfef" />
+  <meta name="description" content="探索佩奇的3D假期世界：走进小黄屋，在花园、游乐场和海滩完成14个主线任务，自由移动、开车、放风筝、拍照和跳泥坑。非官方创意游戏。" />
+  <title>佩奇的完美假期 · 3D快乐冒险</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/style.css" />
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <svg class="svg-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 2 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 3h14a2 2 0 0 1 2 2v16H6a3 3 0 0 1-3-3V5a2 2 0 0 1 1-2ZM3 17h17M8 3v14"/><path d="m13 7 1 2 3 .5-2 2 .5 2.5-2.5-1-2.5 1 .5-2.5-2-2L12 9Z"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Zm6-2v16m6-14v16"/></symbol>
+    <symbol id="i-sound" viewBox="0 0 24 24"><path d="m11 4-6 5H2v6h3l6 5V4Zm4 4a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/></symbol>
+    <symbol id="i-muted" viewBox="0 0 24 24"><path d="m11 4-6 5H2v6h3l6 5V4Zm5 5 6 6m0-6-6 6"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3 6h5l2-3h4l2 3h5v14H3V6Z"/><circle cx="12" cy="12" r="4"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M19 10c0 6-7 11-7 11S5 16 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></symbol>
+    <symbol id="i-jump" viewBox="0 0 24 24"><path d="M4 19q8-15 16 0M12 3v10m-4-6 4-4 4 4"/></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24"><path d="M8 13V5a2 2 0 0 1 4 0v7-9a2 2 0 0 1 4 0v10-6a2 2 0 0 1 4 0v9c0 5-5 7-9 5l-7-7a2 2 0 0 1 3-3l1 2Z"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m2 11 10-9 10 9M5 9v12h14V9M9 21v-8h6v8"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l2 2m10 10 2 2M5 19l2-2m10-10 2-2"/></symbol>
+  </defs></svg>
+  <main id="game" aria-label="佩奇的3D假期世界">
+    <canvas id="world-canvas" tabindex="0" aria-label="3D冒险场景。WASD或方向键移动，空格跳跃，E互动，拖动画面转动视角。"></canvas>
+    <div id="loading" class="loading-screen"><div class="loading-pig"><span></span><i></i></div><h1>佩奇的完美假期</h1><p id="loading-message">正在打开小黄屋的大门…</p></div>
+    <div class="game-hud" id="hud" hidden>
+      <header class="top-bar">
+        <a href="/" class="game-brand" aria-label="佩奇的完美假期首页"><span class="brand-bubble">小猪佩奇<small>Peppa Pig</small></span><span class="brand-title">完美假期<small>3D 快乐冒险</small></span></a>
+        <div class="world-status"><span class="live-dot"></span><span id="region-name">佩奇的家</span><svg class="icon"><use href="#i-sun"/></svg><span id="time-label">晴朗的早晨</span></div>
+        <div class="top-actions">
+          <button id="journal-button" class="progress-button" title="任务手册 J"><svg class="icon"><use href="#i-star"/></svg><b id="quest-count">0</b><span>/ 14</span></button>
+          <button id="album-button" class="round-button" title="假期相册 P" aria-label="打开假期相册"><svg class="icon"><use href="#i-camera"/></svg></button>
+          <button id="sound-button" class="round-button" aria-label="开启音效" aria-pressed="false"><svg class="icon"><use id="sound-symbol" href="#i-muted"/></svg></button>
+          <button id="pause-button" class="round-button" title="暂停 Esc" aria-label="暂停与操作说明"><svg class="icon"><use href="#i-pause"/></svg></button>
+        </div>
+      </header>
+      <aside class="quest-card" aria-label="当前主线任务">
+        <div class="quest-eyebrow"><span><i></i>主线冒险</span><button id="quest-book-button" title="查看全部任务" aria-label="查看全部十四个任务"><svg class="icon"><use href="#i-book"/></svg></button></div>
+        <h1 id="quest-title">假期计划</h1>
+        <p id="quest-description">去找猪妈妈，听听今天的假期计划吧。</p>
+        <ul id="quest-objectives"></ul>
+        <div class="quest-footer"><span id="target-distance">就在前面</span><button id="guide-button">带我过去<svg class="icon"><use href="#i-arrow"/></svg></button></div>
+      </aside>
+      <div class="toast" id="toast" role="status" hidden><span id="toast-icon"><svg class="icon"><use href="#i-star"/></svg></span><div><strong id="toast-title"></strong><p id="toast-message"></p></div></div>
+      <div id="activity-bar" class="activity-bar" hidden><strong id="activity-title"></strong><p id="activity-instruction"></p><div class="activity-meter"><span id="activity-fill"></span></div><button id="leave-activity">结束体验 <kbd>Esc</kbd></button></div>
+      <div class="interaction-prompt" id="interaction-prompt" hidden><kbd>E</kbd><div><strong id="interaction-label"></strong><small id="interaction-detail">靠近一点，一起玩吧</small></div><button id="interact-prompt-button">互动</button></div>
+      <div class="navigation-banner" id="navigation-banner" hidden><span class="live-dot"></span><span id="navigation-message">跟着小路出发</span><button id="stop-navigation" aria-label="停止自动行走"><svg class="icon"><use href="#i-close"/></svg></button></div>
+      <div class="desktop-controls"><span><kbd>W</kbd><span class="wasd-bottom"><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span></span><span>移动<span class="control-secondary">Shift 奔跑</span></span><i></i><span><kbd>空格</kbd> 跳跃</span><i></i><span class="mouse-hint">拖动画面<br><small>转动视角</small></span></div>
+      <div class="touch-controls">
+        <div id="joystick" class="joystick" role="group" aria-label="拖动摇杆移动"><span class="joystick-ring"></span><span id="joystick-knob"></span><small>移动</small></div>
+        <div class="touch-actions"><button id="jump-button" aria-label="跳跃"><svg class="icon"><use href="#i-jump"/></svg><span>跳跃</span></button><button id="interact-button" aria-label="与附近物品互动"><svg class="icon"><use href="#i-hand"/></svg><span>互动</span></button></div>
+      </div>
+      <button class="minimap-panel" id="map-button" aria-label="打开放大地图 M"><canvas id="minimap" width="240" height="240"></canvas><span class="minimap-north">北</span><span class="minimap-label"><svg class="icon"><use href="#i-map"/></svg>假期地图 <kbd>M</kbd></span></button>
+      <div class="save-status" id="save-status">自动保存冒险进度</div>
+      <div class="mode-label" id="mode-label" hidden></div>
+    </div>
+    <div class="camera-frame" id="camera-frame" hidden><span></span><span></span><span></span><span></span><div>把这一刻留在假期里<button id="shutter-button"><svg class="icon"><use href="#i-camera"/></svg>拍下照片 <kbd>E</kbd></button><button id="close-camera">退出相机</button></div></div>
+  </main>
+  <dialog id="game-dialog" class="game-dialog" aria-labelledby="dialog-title"><div class="dialog-header"><span id="dialog-title"></span><button id="dialog-close" class="round-button" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button></div><div id="dialog-content"></div></dialog>
+  <div id="announcer" class="sr-only" aria-live="polite"></div>
+</body>
+</html>
